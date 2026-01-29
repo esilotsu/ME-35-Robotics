@@ -1,0 +1,75 @@
+''' Author: Briana Bouchard
+Stepper motor runs forward, ENTER reverses direction,
+Ctrl-C stops the program.
+'''
+#https://esilotsu.wixsite.com/portfolio/general-9
+#For more details on this project please click the link above
+
+import RPi.GPIO as GPIO
+import time
+import threading
+
+GPIO.setmode(GPIO.BOARD)
+
+# Define GPIO pins
+OUT1 = 12
+OUT2 = 11
+OUT3 = 13
+OUT4 = 15
+
+GPIO.setup(OUT1, GPIO.OUT)
+GPIO.setup(OUT2, GPIO.OUT)
+GPIO.setup(OUT3, GPIO.OUT)
+GPIO.setup(OUT4, GPIO.OUT)
+
+GPIO.output(OUT1, GPIO.LOW)
+GPIO.output(OUT2, GPIO.LOW)
+GPIO.output(OUT3, GPIO.LOW)
+GPIO.output(OUT4, GPIO.LOW)
+
+step_delay = 0.1
+direction = 1   # 1 = forward, -1 = reverse
+running = True
+
+def step_motor(step):
+    if step == 0:
+        GPIO.output(OUT1, GPIO.HIGH)
+        GPIO.output(OUT2, GPIO.LOW)
+        GPIO.output(OUT3, GPIO.HIGH)
+        GPIO.output(OUT4, GPIO.LOW)
+    elif step == 1:
+        GPIO.output(OUT1, GPIO.LOW)
+        GPIO.output(OUT2, GPIO.HIGH)
+        GPIO.output(OUT3, GPIO.HIGH)
+        GPIO.output(OUT4, GPIO.LOW)
+    elif step == 2:
+        GPIO.output(OUT1, GPIO.LOW)
+        GPIO.output(OUT2, GPIO.HIGH)
+        GPIO.output(OUT3, GPIO.LOW)
+        GPIO.output(OUT4, GPIO.HIGH)
+    elif step == 3:
+        GPIO.output(OUT1, GPIO.HIGH)
+        GPIO.output(OUT2, GPIO.LOW)
+        GPIO.output(OUT3, GPIO.LOW)
+        GPIO.output(OUT4, GPIO.HIGH)
+    time.sleep(step_delay)
+
+def keyboard_listener():
+    global direction
+    while True:
+        input()               # press ENTER
+        direction *= -1       # toggle direction
+        print("Direction reversed")
+
+try:
+    # Start keyboard listener thread
+    threading.Thread(target=keyboard_listener, daemon=True).start()
+
+    current_step = 0
+    while running:
+        step_motor(current_step)
+        current_step = (current_step + direction) % 4
+
+except KeyboardInterrupt:
+    print("\nStopping motor")
+    GPIO.cleanup()
