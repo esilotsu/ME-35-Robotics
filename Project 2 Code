@@ -1,0 +1,208 @@
+import RPi.GPIO as GPIO
+import time
+
+GPIO.setmode(GPIO.BOARD)
+
+# -----------------------------
+# MOTOR 1 (90° ROTATIONS)
+# -----------------------------
+M1_OUT1 = 29
+M1_OUT2 = 32
+M1_OUT3 = 36
+M1_OUT4 = 38
+
+for pin in [M1_OUT1, M1_OUT2, M1_OUT3, M1_OUT4]:
+    GPIO.setup(pin, GPIO.OUT)
+    GPIO.output(pin, GPIO.LOW)
+
+def rotate_motor1_90(step_delay=0.03, direction="clockwise"):
+    steps = 50  # 90 degrees ≈ 50 steps
+    for step in range(steps):
+        phase = step % 4
+
+        if direction == "clockwise":
+            if phase == 0:
+                GPIO.output(M1_OUT1,1); GPIO.output(M1_OUT2,0); GPIO.output(M1_OUT3,1); GPIO.output(M1_OUT4,0)
+            elif phase == 1:
+                GPIO.output(M1_OUT1,0); GPIO.output(M1_OUT2,1); GPIO.output(M1_OUT3,1); GPIO.output(M1_OUT4,0)
+            elif phase == 2:
+                GPIO.output(M1_OUT1,0); GPIO.output(M1_OUT2,1); GPIO.output(M1_OUT3,0); GPIO.output(M1_OUT4,1)
+            elif phase == 3:
+                GPIO.output(M1_OUT1,1); GPIO.output(M1_OUT2,0); GPIO.output(M1_OUT3,0); GPIO.output(M1_OUT4,1)
+
+        elif direction == "anticlockwise":
+            if phase == 0:
+                GPIO.output(M1_OUT1,1); GPIO.output(M1_OUT2,0); GPIO.output(M1_OUT3,0); GPIO.output(M1_OUT4,1)
+            elif phase == 1:
+                GPIO.output(M1_OUT1,0); GPIO.output(M1_OUT2,1); GPIO.output(M1_OUT3,0); GPIO.output(M1_OUT4,1)
+            elif phase == 2:
+                GPIO.output(M1_OUT1,0); GPIO.output(M1_OUT2,1); GPIO.output(M1_OUT3,1); GPIO.output(M1_OUT4,0)
+            elif phase == 3:
+                GPIO.output(M1_OUT1,1); GPIO.output(M1_OUT2,0); GPIO.output(M1_OUT3,1); GPIO.output(M1_OUT4,0)
+
+        time.sleep(step_delay)
+
+# -----------------------------
+# MOTOR 2 (COLOUR SORTING)
+# -----------------------------
+M2_OUT1 = 31
+M2_OUT2 = 33
+M2_OUT3 = 35
+M2_OUT4 = 37
+
+for pin in [M2_OUT1, M2_OUT2, M2_OUT3, M2_OUT4]:
+    GPIO.setup(pin, GPIO.OUT)
+    GPIO.output(pin, GPIO.LOW)
+
+def rotate_motor2_steps(step_count, direction="clockwise", step_delay=0.03):
+    for step in range(step_count):
+        phase = step % 4
+
+        if direction == "clockwise":
+            if phase == 0:
+                GPIO.output(M2_OUT1, 1); GPIO.output(M2_OUT2, 0)
+                GPIO.output(M2_OUT3, 1); GPIO.output(M2_OUT4, 0)
+            elif phase == 1:
+                GPIO.output(M2_OUT1, 0); GPIO.output(M2_OUT2, 1)
+                GPIO.output(M2_OUT3, 1); GPIO.output(M2_OUT4, 0)
+            elif phase == 2:
+                GPIO.output(M2_OUT1, 0); GPIO.output(M2_OUT2, 1)
+                GPIO.output(M2_OUT3, 0); GPIO.output(M2_OUT4, 1)
+            elif phase == 3:
+                GPIO.output(M2_OUT1, 1); GPIO.output(M2_OUT2, 0)
+                GPIO.output(M2_OUT3, 0); GPIO.output(M2_OUT4, 1)
+
+        elif direction == "anticlockwise":
+            if phase == 0:
+                GPIO.output(M2_OUT1, 1); GPIO.output(M2_OUT2, 0)
+                GPIO.output(M2_OUT3, 0); GPIO.output(M2_OUT4, 1)
+            elif phase == 1:
+                GPIO.output(M2_OUT1, 0); GPIO.output(M2_OUT2, 1)
+                GPIO.output(M2_OUT3, 0); GPIO.output(M2_OUT4, 1)
+            elif phase == 2:
+                GPIO.output(M2_OUT1, 0); GPIO.output(M2_OUT2, 1)
+                GPIO.output(M2_OUT3, 1); GPIO.output(M2_OUT4, 0)
+            elif phase == 3:
+                GPIO.output(M2_OUT1, 1); GPIO.output(M2_OUT2, 0)
+                GPIO.output(M2_OUT3, 1); GPIO.output(M2_OUT4, 0)
+
+        time.sleep(step_delay)
+
+# -----------------------------
+# TCS3200 COLOUR SENSOR
+# -----------------------------
+s0 = 13
+s1 = 15
+s2 = 16
+s3 = 18
+sig = 22
+
+GPIO.setup(s0, GPIO.OUT)
+GPIO.setup(s1, GPIO.OUT)
+GPIO.setup(s2, GPIO.OUT)
+GPIO.setup(s3, GPIO.OUT)
+GPIO.setup(sig, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+
+GPIO.output(s0, GPIO.HIGH)
+GPIO.output(s1, GPIO.LOW)
+
+cycles = 10
+red_readings, green_readings, blue_readings = [], [], []
+
+def detect_color():
+    # RED
+    GPIO.output(s2,0); GPIO.output(s3,0)
+    time.sleep(0.1)
+    start = time.time()
+    for _ in range(cycles):
+        GPIO.wait_for_edge(sig, GPIO.FALLING)
+    red_readings.append(cycles / (time.time() - start))
+
+    # BLUE
+    GPIO.output(s2,0); GPIO.output(s3,1)
+    time.sleep(0.1)
+    start = time.time()
+    for _ in range(cycles):
+        GPIO.wait_for_edge(sig, GPIO.FALLING)
+    blue_readings.append(cycles / (time.time() - start))
+
+    # GREEN
+    GPIO.output(s2,1); GPIO.output(s3,1)
+    time.sleep(0.1)
+    start = time.time()
+    for _ in range(cycles):
+        GPIO.wait_for_edge(sig, GPIO.FALLING)
+    green_readings.append(cycles / (time.time() - start))
+
+# -----------------------------
+# MAIN PROGRAM
+# -----------------------------
+try:
+    print("Motor 1: Rotate 90° (anticlockwise)")
+    rotate_motor1_90(direction="anticlockwise")
+
+    print("Sensing colour for 5 seconds...")
+    start_time = time.time()
+    while time.time() - start_time < 5:
+        detect_color()
+
+    # Calculate averages
+    avg_red = sum(red_readings) / len(red_readings)
+    avg_green = sum(green_readings) / len(green_readings)
+    avg_blue = sum(blue_readings) / len(blue_readings)
+    print(f"Avg Red: {avg_red:.2f}")
+    print(f"Avg Green: {avg_green:.2f}")
+    print(f"Avg Blue: {avg_blue:.2f}")
+
+    if 5700 <= avg_red <= 6200:
+        colourselected = "Red"
+
+    elif 8000 <= avg_blue <= 8700:
+        colourselected = "Blue"
+
+    elif 6000 <= avg_green <= 6800:
+        colourselected = "Green"
+
+    else:
+        colourselected = "Yellow"
+
+    print("Detected:", colourselected)
+
+    # ---------------- MOTOR 1 SECOND 90° ----------------
+    print("Motor 1: Rotate another 90° (anticlockwise)")
+    rotate_motor1_90(direction="anticlockwise")
+
+    # ---------------- MOTOR 2 FIRST MOVE ----------------
+    print("Motor 2 moving based on colour...")
+    if colourselected == "Red":
+        rotate_motor2_steps(70, "clockwise")
+    elif colourselected == "Blue":
+        rotate_motor2_steps(30, "clockwise")
+    elif colourselected == "Green":
+        rotate_motor2_steps(30, "anticlockwise")
+    elif colourselected == "Yellow":
+        rotate_motor2_steps(70, "anticlockwise")
+
+    time.sleep(1)
+
+    # ---------------- MOTOR 2 RETURNS ----------------
+    print("Motor 2 returning to start...")
+    if colourselected == "Red":
+        rotate_motor2_steps(70, "anticlockwise")
+    elif colourselected == "Blue":
+        rotate_motor2_steps(30, "anticlockwise")
+    elif colourselected == "Green":
+        rotate_motor2_steps(30, "clockwise")
+    elif colourselected == "Yellow":
+        rotate_motor2_steps(70, "clockwise")
+
+    # ---------------- MOTOR 1 RETURNS ----------------
+    print("Motor 1: Returning to start (180° clockwise)")
+    rotate_motor1_90(direction="clockwise")
+    rotate_motor1_90(direction="clockwise")
+
+except KeyboardInterrupt:
+    print("Interrupted")
+
+finally:
+    GPIO.cleanup()
