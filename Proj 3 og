@@ -1,0 +1,111 @@
+import RPi.GPIO as GPIO
+import time
+
+GPIO.setmode(GPIO.BCM)
+
+# IR Sensors
+SENSOR_PINS = [17, 27, 22, 5, 6]
+SENSOR_WEIGHTS = [-2, -1, 0, 1, 2]
+
+for pin in SENSOR_PINS:
+    GPIO.setup(pin, GPIO.IN)
+
+# Motor pins
+ena = 25
+in1 = 8
+in2 = 7
+
+enb = 13
+in3 = 19
+in4 = 26
+
+
+GPIO.setup([ena, in1, in2, enb, in3, in4], GPIO.OUT)
+
+motor_left = GPIO.PWM(ena, 80)
+motor_right = GPIO.PWM(enb, 100)
+
+motor_left.start(0)
+motor_right.start(0)
+
+
+# ===== PID VALUES (SAFE START) =====
+KP = 12
+KI = 0
+KD = 30
+
+BASE_SPEED = 20  # lower base speed
+MAX_SPEED = 50    # limit top speed
+MIN_DC = 0
+
+error_sum = 0
+prev_error = 0
+
+
+def set_motor(left, right):
+    left = max(MIN_DC, min(MAX_SPEED, left))
+    right = max(MIN_DC, min(MAX_SPEED, right))
+
+    GPIO.output(in1, GPIO.LOW)
+    GPIO.output(in2, GPIO.HIGH)
+    GPIO.output(in3, GPIO.HIGH)
+    GPIO.output(in4, GPIO.LOW)
+
+    motor_left.ChangeDutyCycle(left)
+    motor_right.ChangeDutyCycle(right)
+
+print("working2")
+
+
+try:
+    print("Starting PID Line Follower (Safe Mode)")
+    time.sleep(2)
+
+    while True:
+
+        readings = [GPIO.input(pin) for pin in SENSOR_PINS]
+
+        error = 0
+        active = 0
+
+        for val, weight in zip(readings, SENSOR_WEIGHTS):
+            if val == 1:
+                error += weight
+                active += 1
+
+        if active > 0:
+            error /= active
+        else:
+            error = prev_error   # don't spike if line lost
+
+        # ---- PID ----
+        P = error * KP
+
+        error_sum += error
+        error_sum = max(-20, min(20, error_sum))  # anti-windup
+        I = error_sum * KI
+
+        D = (error - prev_error) * KD
+
+        pid = P + I + D
+
+        # Limit PID correction
+        pid = max(-70, min(70, pid))
+
+        left_speed = BASE_SPEED - pid
+        right_speed = BASE_SPEED + pid
+
+        set_motor(left_speed, right_speed)
+
+        prev_error = error
+        print(f"readings: {readings} | error: {error:.2f} | pid: {pid:.1f} | left: {left_speed:.1f} | right: {right_speed:.1f}")
+
+        time.sleep(0.001)  # slower loop = less power spike
+
+except KeyboardInterrupt:
+    print("Stopped")
+
+finally:
+    motor_left.stop()
+    motor_right.stop()
+    GPIO.cleanup()
