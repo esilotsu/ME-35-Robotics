@@ -1,0 +1,92 @@
+https://esilotsu.wixsite.com/portfolio/project-4
+#For more details on this project please click the link above
+
+import cv2 as cv
+import numpy as np
+import RPi.GPIO as GPIO
+from picamera2 import Picamera2
+import time
+
+# --- 1. GPIO Setup based on your test ---
+# Right Motor (A)
+ENA, IN1, IN2 = 17, 27, 22
+# Left Motor (B)
+IN3, IN4, ENB = 23, 24, 25
+
+GPIO.setmode(GPIO.BCM)
+for pin in [ENA, IN1, IN2, IN3, IN4, ENB]:
+    GPIO.setup(pin, GPIO.OUT)
+
+pwm_right = GPIO.PWM(ENA, 100)
+pwm_left = GPIO.PWM(ENB, 100)
+pwm_right.start(0)
+pwm_left.start(0)
+
+def set_motors(left_speed, right_speed):
+    """Accurately maps speeds to the correct physical wheels."""
+    # Left Motor Logic (Motor B)
+    GPIO.output(IN3, GPIO.HIGH if left_speed >= 0 else GPIO.LOW)
+    GPIO.output(IN4, GPIO.LOW if left_speed >= 0 else GPIO.HIGH)
+    pwm_left.ChangeDutyCycle(abs(max(min(left_speed, 100), -100)))
+    
+    # Right Motor Logic (Motor A)
+    GPIO.output(IN1, GPIO.HIGH if right_speed >= 0 else GPIO.LOW)
+    GPIO.output(IN2, GPIO.LOW if right_speed >= 0 else GPIO.HIGH)
+    pwm_right.ChangeDutyCycle(abs(max(min(right_speed, 100), -100)))
+
+# --- 2. Camera & Calibration ---
+picam2 = Picamera2()
+config = picam2.create_preview_configuration(main={"format": 'RGB888', "size": (320, 240)})
+picam2.configure(config)
+picam2.start()
+
+# Your surgical green values (65-78)
+LOWER_GREEN = np.array([65, 91, 43])
+UPPER_GREEN = np.array([78, 255, 255])
+
+last_error = 0
+
+try:
+    while True:
+        frame = picam2.capture_array()
+        hsv = cv.cvtColor(frame, cv.COLOR_RGB2HSV)
+        mask = cv.inRange(hsv, LOWER_GREEN, UPPER_GREEN)
+        
+        # Thicken the line so it's a solid target
+        mask = cv.dilate(mask, np.ones((5,5), np.uint8), iterations=1)
+        
+        # Crop top 20%
+        height, width = mask.shape
+        mask[0:int(height*0.2), 0:width] = 0 
+
+        M = cv.moments(mask)
+        if M['m00'] > 500: # Threshold for a solid line
+            cx = int(M['m10'] / M['m00'])
+            error = cx - (width / 2) # Positive = Line is Right
+            last_error = error
+            
+            # STEERING MATH:
+            # If error is positive (Line is Right), we want to turn Right.
+            # To turn Right, LEFT motor goes FASTER.
+            kp = 0.7
+            base_speed = 30
+            steering_adj = error * kp
+            
+            left_pwr = base_speed + steering_adj
+            right_pwr = base_speed - steering_adj
+            
+            set_motors(left_pwr, right_pwr)
+        else:
+            # SEARCHING: Pivot toward last known line position
+            search_speed = 25
+            if last_error > 0:
+                set_motors(search_speed, -search_speed) # Pivot Right
+            else:
+                set_motors(-search_speed, search_speed) # Pivot Left
+
+except KeyboardInterrupt:
+    print("Stopping...")
+finally:
+    set_motors(0, 0)
+    picam2.stop()
+    GPIO.cleanup()
