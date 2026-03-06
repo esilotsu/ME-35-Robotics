@@ -1,0 +1,86 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create3 Keyboard Control</title>
+</head>
+<body>
+
+<h2>Keyboard Control Active</h2>
+<p>Use Arrow Keys to Control Robot</p>
+<p>Spacebar = STOP</p>
+
+<script>
+const BASE_ID = "appORGiY5zlUCSNcE";
+const TABLE_ID = "tblIGj6C7MZ3aonnI";
+const RECORD_ID = "recndImLL5McK4CG0";
+const TOKEN = "INSERT TOKEN";
+
+const linearSpeed = 0.2;    // constant forward/back speed
+const angularSpeed = 1.0;   // constant turning speed
+
+let currentCommand = "stop";
+
+function updateAirtable(command, linear, angular) {
+
+    fetch(`https://api.airtable.com/v0/${BASE_ID}/${TABLE_ID}/${RECORD_ID}`, {
+        method: "PATCH",
+        headers: {
+            "Authorization": `Bearer ${TOKEN}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            fields: {
+                command: command,
+                linear: linear,
+                angular: angular
+            }
+        })
+    })
+    .then(res => res.json())
+    .then(data => console.log("Updated:", command))
+    .catch(err => console.error(err));
+}
+
+document.addEventListener("keydown", function(event) {
+
+    if (event.repeat) return;  // Prevent spam
+
+    switch(event.key) {
+        case "ArrowUp":
+            currentCommand = "forward";
+            updateAirtable("forward", linearSpeed, 0.0);
+            break;
+
+        case "ArrowDown":
+            currentCommand = "back";
+            updateAirtable("back", -linearSpeed, 0.0);
+            break;
+
+        case "ArrowLeft":
+            currentCommand = "left";
+            updateAirtable("left", 0.0, angularSpeed);
+            break;
+
+        case "ArrowRight":
+            currentCommand = "right";
+            updateAirtable("right", 0.0, -angularSpeed);
+            break;
+
+        case " ":
+            currentCommand = "stop";
+            updateAirtable("stop", 0.0, 0.0);
+            break;
+    }
+});
+
+document.addEventListener("keyup", function(event) {
+    // When key released, stop robot
+    currentCommand = "stop";
+    updateAirtable("stop", 0.0, 0.0);
+});
+
+</script>
+
+</body>
+</html>
